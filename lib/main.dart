@@ -79,11 +79,13 @@ class SmoothMouseListener extends StatefulWidget {
 
 class _SmoothMouseListenerState extends State<SmoothMouseListener> {
   StreamController<double> _controller;
+  StreamController<bool> _mouseController;
 
   @override
   void initState() {
     super.initState();
-    _controller = StreamController();
+    _controller = StreamController<double>();
+    _mouseController = StreamController<bool>();
     _throttle(_controller.stream).listen(
       (double offset) => widget.controller.animateTo(
         offset,
@@ -96,6 +98,7 @@ class _SmoothMouseListenerState extends State<SmoothMouseListener> {
   @override
   void dispose() {
     _controller?.close();
+    _mouseController?.close();
     super.dispose();
   }
 
@@ -107,8 +110,10 @@ class _SmoothMouseListenerState extends State<SmoothMouseListener> {
   Stream<double> _throttle(Stream<double> dy) async* {
     double _currentOffset() => widget.controller.position.pixels;
     double _offset = _currentOffset();
-    Timer _setTimer() =>
-        Timer(widget.duration, () => _offset = _currentOffset());
+    Timer _setTimer() => Timer(
+          widget.duration,
+          () => _offset = _currentOffset(),
+        );
     Timer _timer = _setTimer();
 
     /// TODO make it prettier w/ RestartableTimer
@@ -125,14 +130,25 @@ class _SmoothMouseListenerState extends State<SmoothMouseListener> {
   }
 
   @override
-  Widget build(BuildContext context) => Listener(
-        onPointerSignal: _handlePointerSignal,
-        child: IgnorePointerSignal(child: widget.child),
-      );
+  Widget build(BuildContext context) => MouseRegion(
+      onEnter: (_) => _mouseController.sink.add(true),
+      onExit: (_) => _mouseController.sink.add(false),
+      child: StreamBuilder<bool>(
+        stream: _mouseController.stream,
+        initialData: false,
+        builder: (BuildContext context, AsyncSnapshot<bool> snapshot) =>
+            snapshot.data
+                ? Listener(
+                    onPointerSignal: _handlePointerSignal,
+                    child: IgnorePointerSignal(child: widget.child),
+                  )
+                : widget.child,
+      ));
 }
 
 class IgnorePointerSignal extends SingleChildRenderObjectWidget {
-  IgnorePointerSignal({Key key, Widget child}) : super(key: key, child: child);
+  const IgnorePointerSignal({key, Widget child})
+      : super(key: key, child: child);
 
   @override
   RenderObject createRenderObject(_) => _IgnorePointerSignalRenderObject();
